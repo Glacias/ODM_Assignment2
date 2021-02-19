@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 # Class for simulating the car on the hill problem with the euler method
 class car_on_the_hill_problem():
-	def __init__(self, U, m, g, gamma, time_interval, integration_time_step, policy, p_0, s_0):
+	def __init__(self, U, m, g, gamma, time_interval, integration_time_step, policy, p_0, s_0, T):
 		self.U = U
 		self.m = m
 		self.g = g
@@ -13,14 +13,37 @@ class car_on_the_hill_problem():
 		self.integration_time_step = integration_time_step
 		self.terminal_state_reached = False
 
-		# Compute euler for 1 step
 		# Compute N
 		N = int(time_interval/integration_time_step)
-		u = 4
-		t_0 = 0
-		self.Euler_method_visual(p_0, s_0, u, t_0, time_interval, integration_time_step)
-		result = self.Euler_method(p_0, s_0, u, N, integration_time_step)
-		print(result)
+		# Get next action
+		u_0 = policy.choose_action(p_0, s_0)
+		# Compute first step
+		next_step = self.Euler_method(p_0, s_0, u_0, N, integration_time_step)
+
+		# Trajectory (p_t, s_t, u_t, r, p_next, s_next)
+		self.traj = np.zeros([T, 6])
+
+		# Initialize traj
+		self.traj[0][0] = p_0 # p_t
+		self.traj[0][1] = s_0 # s_t
+		self.traj[0][2] = u_0 # u
+		self.traj[0][3] = self.R(next_step[0], next_step[1]) # r
+		self.traj[0][4] = next_step[0] # p_next
+		self.traj[0][5] = next_step[1] # s_next
+
+		# Compute the following steps
+		for i in range(T-1):
+			self.traj[i+1][0] = self.traj[i][4]
+			self.traj[i+1][1] = self.traj[i][5]
+			self.traj[i+1][2] = policy.choose_action(self.traj[i][4], self.traj[i][5])
+
+			# Compute next step
+			next_step = self.Euler_method(self.traj[i+1][0], self.traj[i+1][1], self.traj[i+1][2], N, integration_time_step)
+
+			self.traj[i+1][3] = self.R(next_step[0], next_step[1])
+			self.traj[i+1][4] = next_step[0]
+			self.traj[i+1][5] = next_step[1]
+
 
 	def Hill(self, p):
 		if p < 0:
@@ -48,7 +71,7 @@ class car_on_the_hill_problem():
 	# Reward signal
 	def R(self, p_next, s_next):
 		# Rewards
-		if p_next < -1 or np.abs(s_next) > 3 and not self.terminal_state_reached:
+		if (p_next < -1 or np.abs(s_next) > 3) and not self.terminal_state_reached:
 			self.terminal_state_reached = True
 			return -1
 		elif p_next > 1 and np.abs(s_next) < 3 and not self.terminal_state_reached:
@@ -56,33 +79,6 @@ class car_on_the_hill_problem():
 			return 1
 		else:
 			return 0
-
-	def Euler_method_visual(self, p_0, s_0, u, t_0, dt, h):
-		# Compute N
-		N = int(dt/h)
-		#t = t_0
-		#p = p_0
-		#s = s_0
-
-		t = np.zeros(N)
-		t[0] = t_0
-		p = np.zeros(N)
-		p[0] = p_0
-		s = np.zeros(N)
-		s[0] = s_0
-		a = np.zeros(N)
-		a[0] = self.acc(p[0], s[0], u)
-
-		for i in range(N-1):
-			a[i+1] = self.acc(p[i], s[i], u)
-			t[i+1] = t[i] + h
-			s[i+1] = s[i] + h * self.acc(p[i], s[i], u)
-			p[i+1] = p[i] + h * s[i]
-
-		plt.plot(t,p)
-		plt.show()
-
-		return (p, s, t)
 
 	def Euler_method(self, p_0, s_0, u, N, h):
 		# Compute N
@@ -101,7 +97,7 @@ class car_on_the_hill_problem():
 
 # main class for creating a policy
 class cls_policy():
-	def choose_action(self, x):
+	def choose_action(self, p, s):
 		pass
 
 # policy class for a constant direction
@@ -116,7 +112,7 @@ class policy_cst(cls_policy):
 		else:
 			self.action = U[1]
 
-	def choose_action(self, x):
+	def choose_action(self, p, s):
 		return self.action
 
 # policy class for a random action
@@ -124,17 +120,8 @@ class policy_rand(cls_policy):
 	def __init__(self, U):
 		self.U = U
 
-	def choose_action(self, x):
+	def choose_action(self, p, s):
 		return self.U[np.random.randint(len(self.U))]
-
-
-
-# apply a policy to find action and get the outgoing new state from f_transition
-def get_next(g, U, x, my_policy, f_transition):
-	u = my_policy.choose_action(x)
-	x_next = f_transition(x, u, g.shape)
-
-	return u, x_next
 
 
 
@@ -144,16 +131,31 @@ if __name__ == '__main__':
 	m = 1
 	g = 9.81
 	gamma = 0.95
-	time_interval = 5
+	time_interval = 0.1
 	integration_time_step = 0.001
+	p_0 = -1
 	#p_0 = np.random.rand()*0.2-0.1
-	p_0 = -0.95
 	s_0 = 0
 	my_policy = policy_cst(U, "right")
+	#my_policy = policy_rand(U)
+	T = 20
 
-	sect1 = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy, p_0, s_0)
+	sect1 = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy, p_0, s_0, T)
+	# Graph
+	plt.plot(range(0,T), sect1.traj[:, 0], 'ro', label='Position')
+	plt.plot(range(0,T), sect1.traj[:, 1], 'go', label='Speed')
+	plt.plot(range(0,T), sect1.traj[:, 3], 'bo', label='Reward')
+	plt.xlabel('Time')
+	plt.ylabel('Value')
+	plt.legend()
+	plt.show()
 
-	#t = 0
-	#for k in range(100):
-	#	t = t + 0.01
-	#	print(t)
+	# Display on terminal
+	print("Trajectory :")
+	for t in range(T):
+		print("(p_" + str(t) + " = " + str(sect1.traj[t][0]) +
+			", s_" + str(t) + " = " + str(sect1.traj[t][1]) +
+			", u_" + str(t) + " = " + str(sect1.traj[t][2]) +
+			", r_" + str(t) + " = " + str(sect1.traj[t][3]) +
+			", p_" + str(t+1) + " = " + str(sect1.traj[t][4]) +
+			", s_" + str(t+1) + " = " + str(sect1.traj[t][5]) + ")")
