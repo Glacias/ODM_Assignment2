@@ -38,7 +38,8 @@ class car_on_the_hill_problem():
 			self.traj[i+1][2] = policy.choose_action(self.traj[i][4], self.traj[i][5])
 
 			# Compute next step
-			next_step = self.Euler_method(self.traj[i+1][0], self.traj[i+1][1], self.traj[i+1][2], N, integration_time_step)
+			if not self.terminal_state_reached:
+				next_step = self.Euler_method(self.traj[i+1][0], self.traj[i+1][1], self.traj[i+1][2], N, integration_time_step)
 
 			self.traj[i+1][3] = self.R(next_step[0], next_step[1])
 			self.traj[i+1][4] = next_step[0]
@@ -133,10 +134,10 @@ if __name__ == '__main__':
 	gamma = 0.95
 	time_interval = 0.1
 	integration_time_step = 0.001
-	p_0 = -1
+	p_0 = 0.1
 	#p_0 = np.random.rand()*0.2-0.1
 	s_0 = 0
-	my_policy = policy_cst(U, "right")
+	my_policy = policy_cst(U, "left")
 	#my_policy = policy_rand(U)
 	T = 20
 
