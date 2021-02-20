@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 # Class for simulating the car on the hill problem with the euler method
 class car_on_the_hill_problem():
-	def __init__(self, U, m, g, gamma, time_interval, integration_time_step, policy, p_0, s_0, T):
+	def __init__(self, U, m, g, gamma, time_interval, integration_time_step, policy, p_0, s_0, T, stop_terminal=False):
 		self.U = U
 		self.m = m
 		self.g = g
@@ -12,6 +12,8 @@ class car_on_the_hill_problem():
 		self.time_interval = time_interval
 		self.integration_time_step = integration_time_step
 		self.terminal_state_reached = False
+		self.terminal_state_nbr = -1
+		self.terminal_state_r = 0
 
 		# Compute N
 		N = int(time_interval/integration_time_step)
@@ -27,12 +29,15 @@ class car_on_the_hill_problem():
 		self.traj[0][0] = p_0 # p_t
 		self.traj[0][1] = s_0 # s_t
 		self.traj[0][2] = u_0 # u
-		self.traj[0][3] = self.R(next_step[0], next_step[1]) # r
+		self.traj[0][3] = self.R(next_step[0], next_step[1], 0) # r
 		self.traj[0][4] = next_step[0] # p_next
 		self.traj[0][5] = next_step[1] # s_next
 
 		# Compute the following steps
 		for i in range(T-1):
+			if self.terminal_state_reached and stop_terminal:
+				break
+
 			self.traj[i+1][0] = self.traj[i][4]
 			self.traj[i+1][1] = self.traj[i][5]
 			self.traj[i+1][2] = policy.choose_action(self.traj[i][4], self.traj[i][5])
@@ -41,7 +46,7 @@ class car_on_the_hill_problem():
 			if not self.terminal_state_reached:
 				next_step = self.Euler_method(self.traj[i+1][0], self.traj[i+1][1], self.traj[i+1][2], N, integration_time_step)
 
-			self.traj[i+1][3] = self.R(next_step[0], next_step[1])
+			self.traj[i+1][3] = self.R(next_step[0], next_step[1], i+1)
 			self.traj[i+1][4] = next_step[0]
 			self.traj[i+1][5] = next_step[1]
 
@@ -70,19 +75,22 @@ class car_on_the_hill_problem():
 		return u/(self.m *(1 + hd1**2)) - self.g * hd1/(1 + hd1**2) - s**2 * hd1 * self.Hill_second_der(p)/(1 + hd1**2)
 
 	# Reward signal
-	def R(self, p_next, s_next):
+	def R(self, p_next, s_next, step_nbr):
 		# Rewards
 		if (p_next < -1 or np.abs(s_next) > 3) and not self.terminal_state_reached:
 			self.terminal_state_reached = True
+			self.terminal_state_nbr = step_nbr
+			self.terminal_state_r = -1
 			return -1
 		elif p_next > 1 and np.abs(s_next) < 3 and not self.terminal_state_reached:
 			self.terminal_state_reached = True
+			self.terminal_state_nbr = step_nbr
+			self.terminal_state_r = 1
 			return 1
 		else:
 			return 0
 
 	def Euler_method(self, p_0, s_0, u, N, h):
-		# Compute N
 		p = p_0
 		s = s_0
 
@@ -125,6 +133,17 @@ class policy_rand(cls_policy):
 		return self.U[np.random.randint(len(self.U))]
 
 
+# policy for simple climb
+class policy_climb(cls_policy):
+    def __init__(self, U):
+        self.U = U
+
+    def choose_action(self, p, s):
+        if p > -0.25 and s <= 0:
+            return self.U[1]
+
+        else:
+            return self.U[0]
 
 if __name__ == '__main__':
 
@@ -134,14 +153,15 @@ if __name__ == '__main__':
 	gamma = 0.95
 	time_interval = 0.1
 	integration_time_step = 0.001
-	p_0 = 0.1
+	p_0 = 0
 	#p_0 = np.random.rand()*0.2-0.1
 	s_0 = 0
-	my_policy = policy_cst(U, "left")
+	#my_policy = policy_cst(U, "left")
 	#my_policy = policy_rand(U)
-	T = 20
+	my_policy = policy_climb(U)
+	T = 50
 
-	sect1 = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy, p_0, s_0, T)
+	sect1 = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy, p_0, s_0, T, stop_terminal=True)
 	# Graph
 	plt.plot(range(0,T), sect1.traj[:, 0], 'ro', label='Position')
 	plt.plot(range(0,T), sect1.traj[:, 1], 'go', label='Speed')
