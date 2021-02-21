@@ -205,7 +205,7 @@ def plot_decision(Q_estimator, episode=None, plot_fig=True, save_name=None):
 	Q_diff_pol = Q_diff
 	Q_diff_pol[Q_diff_pol>0] = 1
 	Q_diff_pol[Q_diff_pol<0] = -1
-	plt.contourf(p, s, Q_diff, cmap='RdBu')
+	plt.contourf(p, s, Q_diff, cmap='RdBu', vmin=-1, vmax=1)
 	plt.title("Policy")
 	plt.xlabel("p")
 	plt.ylabel("s")
@@ -347,7 +347,8 @@ if __name__ == '__main__':
 	ep = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_opt, p_0, s_0, T, stop_terminal=True)
 
 	print()
-	print("Terminal state reached after {} steps with reward {}".format(ep.terminal_state_nbr+1, ep.terminal_state_r))
+	print("Testing policy on a simulation starting at p_0 = 0 :")
+	print("\tTerminal state reached after {} steps with reward {}".format(ep.terminal_state_nbr+1, ep.terminal_state_r))
 
 	## Plot heat map
 	plot_Q(Q_estimator, -4, plotname=r'$\widehat{Q}\left(p, s, -4\right)$', plot_fig=plot_fig, save_name=img_folder+prtcl_name+"+Q_back")
@@ -357,9 +358,11 @@ if __name__ == '__main__':
 
 	## Estimate expected return
 	n_traj = 50
-	N = 50
+	T = 1000
 	p_0_table = [np.random.rand()*0.2-0.1 for i in range(n_traj)]
-	table_traj = [car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_opt, p_0_table[i], s_0, N, stop_terminal=True) for i in range(n_traj)]
+	table_traj = [car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_opt, p_0_table[i], s_0, T, stop_terminal=True) for i in range(n_traj)]
+	step_last_reward = np.array([table_traj[i].terminal_state_nbr for i in range(len(table_traj))]).max()
+	N = step_last_reward+1 + int(step_last_reward*0.25)
 	score_mu_table = score_mu(table_traj, N)
 
 	# graph
