@@ -107,13 +107,13 @@ def learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0
 		print("Generating episodes' serie #{}/{} ({} news)".format(i+1, n_fit, ep_per_fit)) if verbose else ""
 		print("\t", end='') if verbose else ""
 		for j in range(ep_per_fit):
-			print(".{}".format(j+1), end='') if verbose else ""
+			print(".{}".format(j+1), end='\0') if verbose else ""
 			p_0 = np.random.rand()*0.2-0.1
 			ep = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy, p_0, s_0, T, stop_terminal=True)
 			n_new_obs += (ep.terminal_state_nbr+1)
 			observations = add_episode(observations, ep)
 
-		print("\t{} new tuples generated, total of {}".format(n_new_obs, observations.shape[0])) if verbose else ""
+		print("\n\t{} new tuples generated, total of {}".format(n_new_obs, observations.shape[0])) if verbose else ""
 
 		Q_estimator = compute_Q_estimator(observations, U, gamma, Q_estimator, N_Q, thresh=thresh, verbose=verbose)
 		# set the eps-greedy policy for next generations
@@ -181,8 +181,12 @@ def plot_decision(Q_estimator, episode=None, plot_fig=True, save_name=None):
 	# if an episode (one simulation) is given, add it to the plot
 	if episode is not None:
 		# Extract traj in the state space
-		p_traj = np.append(episode.traj[0, 0], episode.traj[:episode.terminal_state_nbr+1, 4])
-		s_traj = np.append(episode.traj[0, 1], episode.traj[:episode.terminal_state_nbr+1, 5])
+		if episode.terminal_state_r == 0:
+			p_traj = np.append(episode.traj[0, 0], episode.traj[:, 4])
+			s_traj = np.append(episode.traj[0, 1], episode.traj[:, 5])
+		else:
+			p_traj = np.append(episode.traj[0, 0], episode.traj[:episode.terminal_state_nbr+1, 4])
+			s_traj = np.append(episode.traj[0, 1], episode.traj[:episode.terminal_state_nbr+1, 5])
 
 		# plot traj
 		plt.plot(p_traj, s_traj, 'k', label="trajectory")
@@ -283,21 +287,21 @@ if __name__ == '__main__':
 	else:
 		print("Estimator used is MLPRegressor")
 		prtcl_name += "mlp"
-		Q_estimator = MLPRegressor(random_state=0, max_iter=500, hidden_layer_sizes=(6,6))
+		Q_estimator = MLPRegressor(max_iter=500, hidden_layer_sizes=(4,4))
 
 	# STOPPING RULE (True = N_Q || False = threshold)
-	stop_ineq = True
+	stop_ineq = False
 	thresh_ineq = 0.1
 	thresh_Q = 0.7
 
 	# POLICY (True = random || False = eps-greedy)
-	use_pol_rand = True
+	use_pol_rand = False
 	eps = 0.1
 
 	# EPISODE TO GENERATE
 	T = 1000
 	n_ep_tot = 500
-	n_fit = 10
+	n_fit = 5
 	ep_per_fit = int(n_ep_tot/n_fit)
 	print("Total number of episode to generate : " + str(n_ep_tot))
 
