@@ -265,7 +265,7 @@ if __name__ == '__main__':
 	verbose = True
 	plot_fig = True
 	prtcl_name = ""
-	img_folder = "img/"
+	img_folder = "out/"
 
 	# REGRESSION ALGORITHM
 	algo = ["LinearRegression", "ExtraTreesRegressor", "MLPRegressor"][1]
@@ -306,7 +306,6 @@ if __name__ == '__main__':
 		Br = 1
 		N_Q = compute_N_Q(gamma, Br, thresh_ineq)
 		print("Stopping rule by bounding inequality :\n\tN_Q = " + str(N_Q))
-		N_Q=20
 
 		prtcl_name += "+bound_gamma_N_{}".format(N_Q)
 
