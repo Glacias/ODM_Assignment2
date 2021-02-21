@@ -9,6 +9,9 @@ from sklearn.ensemble import ExtraTreesRegressor
 # http://scikit-learn.org/stable/modules/generated/sklearn.neural_network.MLPRegressor.html
 from sklearn.neural_network import MLPRegressor
 
+from keras.models import Sequential
+from keras.layers import Dense
+
 from section1 import *
 from section2 import *
 
@@ -254,6 +257,30 @@ class policy_eps_greedy_estimator(cls_policy):
 
 			return self.U[u_idx]
 
+class NN_estimator():
+	def __init__(self):
+		# Define the keras model
+		self.model = Sequential()
+		self.model.add(Dense(12, input_dim=3, kernel_initializer='normal', activation='relu'))
+		self.model.add(Dense(1, kernel_initializer='normal'))
+
+		self.model.compile(loss='mean_squared_error', optimizer='adam', metrics=['accuracy'])
+
+	def fit(self, X, y):
+		#self.model.reset_metrics()
+		self.model = Sequential()
+		self.model.add(Dense(12, input_dim=3, kernel_initializer='normal', activation='relu'))
+		self.model.add(Dense(1, kernel_initializer='normal'))
+
+		self.model.compile(loss='mean_squared_error', optimizer='adam', metrics=['accuracy'])
+		print(y)
+		self.model.fit(X, y, epochs=3)
+
+	def predict(self, X):
+		out = self.model.predict(X)
+		return out.reshape(len(out))
+
+
 if __name__ == '__main__':
 	# Set up constants
 	U = [4, -4]
@@ -265,14 +292,13 @@ if __name__ == '__main__':
 
 	s_0 = 0
 
-
 	verbose = True
 	plot_fig = True
 	prtcl_name = ""
 	img_folder = "out/"
 
 	# REGRESSION ALGORITHM
-	algo = ["LinearRegression", "ExtraTreesRegressor", "MLPRegressor"][1]
+	algo = ["LinearRegression", "ExtraTreesRegressor", "MLPRegressor"][2]
 
 	if algo == "LinearRegression":
 		print("Estimator used is LinearRegression")
@@ -287,15 +313,16 @@ if __name__ == '__main__':
 	else:
 		print("Estimator used is MLPRegressor")
 		prtcl_name += "mlp"
-		Q_estimator = MLPRegressor(max_iter=500, hidden_layer_sizes=(4,4))
+		#Q_estimator = MLPRegressor(max_iter=500, hidden_layer_sizes=(4,4))
+		Q_estimator = NN_estimator()
 
 	# STOPPING RULE (True = N_Q || False = threshold)
-	stop_ineq = False
+	stop_ineq = True
 	thresh_ineq = 0.1
 	thresh_Q = 0.7
 
 	# POLICY (True = random || False = eps-greedy)
-	use_pol_rand = False
+	use_pol_rand = True
 	eps = 0.1
 
 	# EPISODE TO GENERATE
@@ -373,7 +400,7 @@ if __name__ == '__main__':
 	plt.plot(range(0, N+1), score_mu_table)
 	plt.xticks(range(0,N+1,int((N+1)/4)))
 	plt.xlabel('N')
-	plt.ylabel('Score $\mu$')
+	plt.ylabel('Expected return $(J^{\mu}_N)$')
 	plt.savefig(img_folder+prtcl_name+"+exp_ret_{}.png".format(n_traj))
 	if plot_fig:
 		plt.show()

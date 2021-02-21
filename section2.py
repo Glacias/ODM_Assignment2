@@ -36,5 +36,5 @@ if __name__ == '__main__':
 	plt.plot(range(0, N+1), score_mu_table)
 	plt.xticks(range(0,N+1,int((N+1)/4)))
 	plt.xlabel('N')
-	plt.ylabel('Score $\mu$')
+	plt.ylabel('Expected return $(J^{\mu}_N)$')
 	plt.show()

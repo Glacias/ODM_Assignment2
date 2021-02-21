@@ -13,12 +13,12 @@ if __name__ == '__main__':
 	gamma = 0.95
 	time_interval = 0.1
 	integration_time_step = 0.001
-	p_0 = -0.8
+	p_0 = 0
 	#p_0 = np.random.rand()*0.2-0.1
 	s_0 = 0
 	my_policy = policy_cst(U, "right")
 	#my_policy = policy_rand(U)
-	T = 100
+	T = 1000
 
 	sect1 = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy, p_0, s_0, T)
 
