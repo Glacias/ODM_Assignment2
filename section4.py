@@ -10,6 +10,7 @@ from sklearn.ensemble import ExtraTreesRegressor
 from sklearn.neural_network import MLPRegressor
 
 from section1 import *
+from section2 import *
 
 def build_y(observations, U, gamma, my_estimator):
 
@@ -123,6 +124,99 @@ def learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0
 	# Compute Q_N
 	return Q_estimator
 
+def plot_Q(Q_estimator, action, plotname="", plot_fig=True, save_name=None):
+	# create space
+	p = np.arange(-1, 1, 0.01)
+	s = np.arange(-3, 3, 0.01)
+	pp, ss = np.meshgrid(p, s)
+
+	# get prediction for each <p, s>
+	Q_pred = pred_Q_mat(Q_estimator, pp, ss, action)
+
+	# plot Q values
+	plt.contourf(p, s, Q_pred, cmap='RdBu')
+	plt.colorbar()
+	plt.title(plotname)
+	plt.xlabel("p")
+	plt.ylabel("s")
+
+	if save_name is not None:
+		plt.savefig(save_name)
+	if plot_fig:
+		plt.show()
+
+	plt.clf()
+
+def pred_Q_mat(Q_estimator, pp, ss, action):
+	# reshape to fit predict() function requirement
+	ps_mat = np.append(np.expand_dims(pp, axis=2), np.expand_dims(ss, axis=2), axis=2)
+	ps_mat = ps_mat.reshape([-1, 2])
+	ps_mat = np.append(ps_mat, np.ones([ps_mat.shape[0] ,1])*action , axis=1)
+
+	# use Q_estimator to predict value of the space
+	Q_pred = Q_estimator.predict(ps_mat)
+
+	# reshape back prediction to fit space again
+	return Q_pred.reshape(pp.shape)
+
+def plot_decision(Q_estimator, episode=None, plot_fig=True, save_name=None):
+	# create space
+	p = np.arange(-1, 1, 0.01)
+	s = np.arange(-3, 3, 0.01)
+	pp, ss = np.meshgrid(p, s)
+
+   # get prediction for each <p, s> and u = -4 then u = 4
+	Q_pred_back = pred_Q_mat(Q_estimator, pp, ss, -4)
+	Q_pred_front = pred_Q_mat(Q_estimator, pp, ss, 4)
+
+	# front Q - back Q => positive value means front action gives a greater Q
+	Q_diff = Q_pred_front - Q_pred_back
+
+	# plot Q_diff => back (orange) | front (purple)
+	max_diff = abs(Q_diff).max()
+	plt.contourf(p, s, Q_diff, cmap='RdBu', vmin=-max_diff, vmax=max_diff)
+	cbar = plt.colorbar()
+	cbar.set_label('$Q(p, s, 4) - Q(p, s, -4)$', rotation=270)
+
+	# if an episode (one simulation) is given, add it to the plot
+	if episode is not None:
+		# Extract traj in the state space
+		p_traj = np.append(episode.traj[0, 0], episode.traj[:episode.terminal_state_nbr+1, 4])
+		s_traj = np.append(episode.traj[0, 1], episode.traj[:episode.terminal_state_nbr+1, 5])
+
+		# plot traj
+		plt.plot(p_traj, s_traj, 'k', label="trajectory")
+		plt.plot(p_traj, s_traj, 'Dg')
+		plt.legend(loc='lower right')
+
+	# add title and labels
+	plt.title("Action taken on a path")
+	plt.xlabel("p")
+	plt.ylabel("s")
+
+	if save_name is not None:
+		plt.savefig(save_name+"+path_taken.png")
+	if plot_fig:
+		plt.show()
+
+	plt.clf()
+
+	# policy plot
+	Q_diff_pol = Q_diff
+	Q_diff_pol[Q_diff_pol>0] = 1
+	Q_diff_pol[Q_diff_pol<0] = -1
+	plt.contourf(p, s, Q_diff, cmap='RdBu')
+	plt.title("Policy")
+	plt.xlabel("p")
+	plt.ylabel("s")
+
+	if save_name is not None:
+		plt.savefig(save_name+"+policy.png")
+	if plot_fig:
+		plt.show()
+
+	plt.clf()
+
 
 # compute N such that the bound on the suboptimality
 # for the approximation (over an horizon limited to N steps) of the optimal policy
@@ -168,18 +262,36 @@ if __name__ == '__main__':
 	s_0 = 0
 
 
+	verbose = True
+	plot_fig = True
+	prtcl_name = ""
+	img_folder = "img/"
+
 	# REGRESSION ALGORITHM
-	#Q_estimator = LinearRegression()
-	Q_estimator = ExtraTreesRegressor(n_estimators=100, random_state=0)
-	#Q_estimator = MLPRegressor(random_state=0, max_iter=500, hidden_layer_sizes=(6,6))
+	algo = ["LinearRegression", "ExtraTreesRegressor", "MLPRegressor"][1]
+
+	if algo == "LinearRegression":
+		print("Estimator used is LinearRegression")
+		prtcl_name += "lin_reg"
+		Q_estimator = LinearRegression()
+
+	elif algo == "ExtraTreesRegressor":
+		print("Estimator used is ExtraTreesRegressor")
+		prtcl_name += "extra_trees"
+		Q_estimator = ExtraTreesRegressor(n_estimators=100, random_state=0)
+
+	else:
+		print("Estimator used is MLPRegressor")
+		prtcl_name += "mlp"
+		Q_estimator = MLPRegressor(random_state=0, max_iter=500, hidden_layer_sizes=(6,6))
 
 	# STOPPING RULE (True = N_Q || False = threshold)
-	stop_ineq = False
+	stop_ineq = True
 	thresh_ineq = 0.1
 	thresh_Q = 0.7
 
 	# POLICY (True = random || False = eps-greedy)
-	use_pol_rand = False
+	use_pol_rand = True
 	eps = 0.1
 
 	# EPISODE TO GENERATE
@@ -190,28 +302,42 @@ if __name__ == '__main__':
 	print("Total number of episode to generate : " + str(n_ep_tot))
 
 	if stop_ineq:
+
 		Br = 1
 		N_Q = compute_N_Q(gamma, Br, thresh_ineq)
 		print("Stopping rule by bounding inequality :\n\tN_Q = " + str(N_Q))
+		N_Q=20
+
+		prtcl_name += "+bound_gamma_N_{}".format(N_Q)
 
 		if use_pol_rand:
+			prtcl_name += "+random_gen_{}ep".format(n_ep_tot)
+
 			print("Using random policy")
-			Q_estimator = learn_Q_random(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_ep_tot, Q_estimator, N_Q)
+			Q_estimator = learn_Q_random(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_ep_tot, Q_estimator, N_Q, verbose=verbose)
 
 		else:
+			prtcl_name += "+eps_greedy_gen_{}_{}".format(n_fit, ep_per_fit)
+
 			print("Using eps-greedy policy")
-			Q_estimator = learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_fit, ep_per_fit, Q_estimator, eps, N_Q, verbose=True)
+			Q_estimator = learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_fit, ep_per_fit, Q_estimator, eps, N_Q, verbose=verbose)
 
 	else:
+		prtcl_name += "+thresh_Q_diff"
+
 		print("Stopping rule by threshold on Q convergence :\n\tthreshold = " + str(thresh_Q))
 
 		if use_pol_rand:
+			prtcl_name += "+random_gen_{}ep".format(n_ep_tot)
+
 			print("Using random policy")
-			Q_estimator = learn_Q_random(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_ep_tot, Q_estimator, 0, thresh = thresh_Q)
+			Q_estimator = learn_Q_random(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_ep_tot, Q_estimator, 0, thresh = thresh_Q, verbose=verbose)
 
 		else:
+			prtcl_name += "+eps_greedy_gen_{}_{}".format(n_fit, ep_per_fit)
+
 			print("Using eps-greedy policy")
-			Q_estimator = learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_fit, ep_per_fit, Q_estimator, eps, 0, thresh = thresh_Q, verbose=True)
+			Q_estimator = learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_fit, ep_per_fit, Q_estimator, eps, 0, thresh = thresh_Q, verbose=verbose)
 
 
 	# Save policy inferred from Q_N
@@ -223,3 +349,30 @@ if __name__ == '__main__':
 
 	print()
 	print("Terminal state reached after {} steps with reward {}".format(ep.terminal_state_nbr+1, ep.terminal_state_r))
+
+	## Plot heat map
+	plot_Q(Q_estimator, -4, plotname=r'$\widehat{Q}\left(p, s, -4\right)$', plot_fig=plot_fig, save_name=img_folder+prtcl_name+"+Q_back")
+	plot_Q(Q_estimator, 4, plotname=r'$\widehat{Q}\left(p, s, 4\right)$', plot_fig=plot_fig, save_name=img_folder+prtcl_name+"+Q_front")
+
+	plot_decision(Q_estimator, episode=ep, plot_fig=plot_fig, save_name=img_folder+prtcl_name)
+
+	## Estimate expected return
+	n_traj = 50
+	N = 50
+	p_0_table = [np.random.rand()*0.2-0.1 for i in range(n_traj)]
+	table_traj = [car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_opt, p_0_table[i], s_0, N, stop_terminal=True) for i in range(n_traj)]
+	score_mu_table = score_mu(table_traj, N)
+
+	# graph
+	plt.plot(range(0, N+1), score_mu_table)
+	plt.xticks(range(0,N+1,int((N+1)/4)))
+	plt.xlabel('N')
+	plt.ylabel('Score $\mu$')
+	plt.savefig(img_folder+prtcl_name+"+exp_ret_{}.png".format(n_traj))
+	if plot_fig:
+		plt.show()
+
+	print("Final expected return = {}".format(score_mu_table[-1]))
+	file = open(img_folder+prtcl_name+"+exp_ret_{}.txt".format(n_traj), "w")
+	file.write("Final expected return = {}".format(score_mu_table[-1]))
+	file.close()
