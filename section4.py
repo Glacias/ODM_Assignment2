@@ -266,26 +266,27 @@ class policy_eps_greedy_estimator(cls_policy):
 
 			return self.U[u_idx]
 
+# Class for the neural network estimator
 class NN_estimator():
 	def __init__(self):
 		# Define the keras model
 		self.model = Sequential()
 		self.model.add(Dense(200, input_dim=3, activation='relu'))
 		self.model.add(Dense(1, activation='linear'))
-
 		self.model.compile(loss='mean_squared_error', optimizer='adam', metrics=['accuracy'])
 
 	def fit(self, X, y):
-		#self.model.reset_metrics()
+		# Re-initialize the network at each fit
 		self.model = Sequential()
 		self.model.add(Dense(200, input_dim=3, activation='relu'))
 		self.model.add(Dense(1, activation='linear'))
-
 		self.model.compile(loss='mean_squared_error', optimizer='adam', metrics=['accuracy'])
-		print(y)
+
+		# Fit
 		self.model.fit(X, y, epochs=50)
 
 	def predict(self, X):
+		# Predict
 		out = self.model.predict(X)
 		return out.reshape(len(out))
 
@@ -328,7 +329,7 @@ if __name__ == '__main__':
 	# STOPPING RULE (True = N_Q || False = threshold)
 	stop_ineq = True
 	thresh_ineq = 0.1
-	thresh_Q = 0.7
+	thresh_Q = 0.1
 
 	# POLICY (True = random || False = eps-greedy)
 	use_pol_rand = False
@@ -341,10 +342,11 @@ if __name__ == '__main__':
 	ep_per_fit = int(n_ep_tot/n_fit)
 	print("Total number of episode to generate : " + str(n_ep_tot))
 
+	Br = 1
+	N_Q = compute_N_Q(gamma, Br, thresh_ineq)
+
 	if stop_ineq:
 
-		Br = 1
-		N_Q = compute_N_Q(gamma, Br, thresh_ineq)
 		print("Stopping rule by bounding inequality :\n\tN_Q = " + str(N_Q))
 
 		prtcl_name += "+bound_gamma_N_{}".format(N_Q)
@@ -365,7 +367,7 @@ if __name__ == '__main__':
 		prtcl_name += "+thresh_Q_diff"
 
 		print("Stopping rule by threshold on Q convergence :\n\tthreshold = " + str(thresh_Q))
-		max_iter = 200
+		max_iter = N_Q
 
 		if use_pol_rand:
 			prtcl_name += "+random_gen_{}ep".format(n_ep_tot)
