@@ -38,12 +38,8 @@ def add_episode(observations, episode):
 	return np.append(observations, episode.traj[0:episode.terminal_state_nbr+1, :], axis=0)
 
 
-# N ignored if thresh is set
+# N value still active (to set a maximum of iteration) if thresh is set
 def compute_Q_estimator(observations, U, gamma, my_estimator, N, thresh=0, verbose=False):
-
-	# threshold is set -> use stopping rule 2
-	if thresh > 0:
-		N = np.infty
 
 	# output for Q_1
 	print("\tComputing Q_1") if verbose else ""
@@ -369,18 +365,19 @@ if __name__ == '__main__':
 		prtcl_name += "+thresh_Q_diff"
 
 		print("Stopping rule by threshold on Q convergence :\n\tthreshold = " + str(thresh_Q))
+		max_iter = 200
 
 		if use_pol_rand:
 			prtcl_name += "+random_gen_{}ep".format(n_ep_tot)
 
 			print("Using random policy")
-			Q_estimator = learn_Q_random(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_ep_tot, Q_estimator, 0, thresh = thresh_Q, verbose=verbose)
+			Q_estimator = learn_Q_random(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_ep_tot, Q_estimator, max_iter, thresh = thresh_Q, verbose=verbose)
 
 		else:
 			prtcl_name += "+eps_greedy_gen_{}_{}".format(n_fit, ep_per_fit)
 
 			print("Using eps-greedy policy")
-			Q_estimator = learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_fit, ep_per_fit, Q_estimator, eps, 0, thresh = thresh_Q, eps_adapt=True, verbose=verbose)
+			Q_estimator = learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_fit, ep_per_fit, Q_estimator, eps, max_iter, thresh = thresh_Q, eps_adapt=True, verbose=verbose)
 
 
 	# Save policy inferred from Q_N
