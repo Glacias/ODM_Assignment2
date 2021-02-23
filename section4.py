@@ -15,17 +15,25 @@ from keras.layers import Dense
 from section1 import *
 from section2 import *
 
+# for a set of observation (four-tuples) which compose our training set,
+# compute the value of Q_N using an estimator to compute the value for Q_N-1
 def build_y(observations, U, gamma, my_estimator):
 
 	Q_prev = np.empty([observations.shape[0], len(U)])
+
+	# Q_N-1 value for the next states of the TS considering all possible actions
 	for u_idx in range(len(U)):
 		X_predi = np.append(observations[:,4:], np.ones([observations.shape[0], 1]) * U[u_idx], axis=1)
 		Q_prev[:, u_idx] = my_estimator.predict(X_predi)
 
+	# keep for each next state the best possible Q_N-1 value
 	max_Q_prev = Q_prev.max(axis=1)
 
+	# return all estimated Q_N
 	return observations[:, 3] + gamma * max_Q_prev
 
+
+# add a generated episode to a set of observations
 def add_episode(observations, episode):
 	return np.append(observations, episode.traj[0:episode.terminal_state_nbr+1, :], axis=0)
 
@@ -38,7 +46,6 @@ def compute_Q_estimator(observations, U, gamma, my_estimator, N, thresh=0, verbo
 		N = np.infty
 
 	# output for Q_1
-
 	print("\tComputing Q_1") if verbose else ""
 	y = observations[:,3]
 	my_estimator.fit(observations[:,:3], y)
@@ -80,13 +87,14 @@ def compute_Q_estimator(observations, U, gamma, my_estimator, N, thresh=0, verbo
 
 	return my_estimator
 
-
+# learn an estimator of Q_N with generation of episodes using a random policy
 def learn_Q_random(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_ep, my_estimator, N_Q, thresh=0, verbose=True):
 	observations = np.empty([0,6])
 	my_policy_rand = policy_rand(U)
 
 	print("Generating episodes") if verbose else ""
 
+	# generate episodes
 	for i in range(n_ep):
 		p_0 = np.random.rand()*0.2-0.1
 		ep = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_rand, p_0, s_0, T, stop_terminal=True)
@@ -97,10 +105,11 @@ def learn_Q_random(U, m, g, gamma, time_interval, integration_time_step, s_0, T,
 	# Compute Q_N
 	return compute_Q_estimator(observations, U, gamma, Q_estimator, N_Q, thresh=thresh, verbose=verbose)
 
-
+# iteratively learn several estimators of Q_N ('n_fit' times)
+# with episodes generated using an eps-policy based on the previous iteration of Q_N computation
 def learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_fit, ep_per_fit, Q_estimator, eps, N_Q, thresh=0, verbose=True):
 	observations = np.empty([0,6])
-	# start with a full random policy
+	# start with a full random policy (eps=1 means every choice will be random)
 	my_policy = policy_eps_greedy_estimator(U, None, 1)
 
 
@@ -109,6 +118,8 @@ def learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0
 
 		print("Generating episodes' serie #{}/{} ({} news)".format(i+1, n_fit, ep_per_fit)) if verbose else ""
 		print("\t", end='') if verbose else ""
+
+		# generate episodes using previous estimator of Q_N
 		for j in range(ep_per_fit):
 			print(".{}".format(j+1), end='\0') if verbose else ""
 			p_0 = np.random.rand()*0.2-0.1
@@ -118,13 +129,15 @@ def learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0
 
 		print("\n\t{} new tuples generated, total of {}".format(n_new_obs, observations.shape[0])) if verbose else ""
 
+		# estimate Q_N from the current set of observations
 		Q_estimator = compute_Q_estimator(observations, U, gamma, Q_estimator, N_Q, thresh=thresh, verbose=verbose)
+
 		# set the eps-greedy policy for next generations
 		my_policy.Q_estimator = Q_estimator
 		my_policy.eps = eps
 
 
-	# Compute Q_N
+	# return the final estimator
 	return Q_estimator
 
 def plot_Q(Q_estimator, action, plotname="", plot_fig=True, save_name=None):
@@ -184,12 +197,8 @@ def plot_decision(Q_estimator, episode=None, plot_fig=True, save_name=None):
 	# if an episode (one simulation) is given, add it to the plot
 	if episode is not None:
 		# Extract traj in the state space
-		if episode.terminal_state_r == 0:
-			p_traj = np.append(episode.traj[0, 0], episode.traj[:, 4])
-			s_traj = np.append(episode.traj[0, 1], episode.traj[:, 5])
-		else:
-			p_traj = np.append(episode.traj[0, 0], episode.traj[:episode.terminal_state_nbr+1, 4])
-			s_traj = np.append(episode.traj[0, 1], episode.traj[:episode.terminal_state_nbr+1, 5])
+		p_traj = np.append(episode.traj[0, 0], episode.traj[:episode.terminal_state_nbr+1, 4])
+		s_traj = np.append(episode.traj[0, 1], episode.traj[:episode.terminal_state_nbr+1, 5])
 
 		# plot traj
 		plt.plot(p_traj, s_traj, 'k', label="trajectory")
@@ -231,7 +240,7 @@ def plot_decision(Q_estimator, episode=None, plot_fig=True, save_name=None):
 def compute_N_Q(gamma, Br, thresh):
 	return math.ceil(math.log(thresh * (1-gamma)**2 / (2*Br) , gamma))
 
-
+# policy taking the argmax of Q_N computed with an estimator
 class policy_estimator(cls_policy):
 	def __init__(self, U, Q_estimator):
 		self.U = U
@@ -242,7 +251,8 @@ class policy_estimator(cls_policy):
 
 		return self.U[u_idx]
 
-
+# policy taking actions at random with prob 'eps' or
+# taking the argmax of Q_N computed with an estimator otherwise
 class policy_eps_greedy_estimator(cls_policy):
 	def __init__(self, U, Q_estimator, eps):
 		self.U = U

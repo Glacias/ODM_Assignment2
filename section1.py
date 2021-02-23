@@ -12,7 +12,7 @@ class car_on_the_hill_problem():
 		self.time_interval = time_interval
 		self.integration_time_step = integration_time_step
 		self.terminal_state_reached = False
-		self.terminal_state_nbr = -1
+		self.terminal_state_nbr = T-1
 		self.terminal_state_r = 0
 
 		# Compute N
