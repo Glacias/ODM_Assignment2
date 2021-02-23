@@ -107,7 +107,7 @@ def learn_Q_random(U, m, g, gamma, time_interval, integration_time_step, s_0, T,
 
 # iteratively learn several estimators of Q_N ('n_fit' times)
 # with episodes generated using an eps-policy based on the previous iteration of Q_N computation
-def learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_fit, ep_per_fit, Q_estimator, eps, N_Q, thresh=0, verbose=True):
+def learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_fit, ep_per_fit, Q_estimator, eps, N_Q, thresh=0, eps_adapt=False, verbose=True):
 	observations = np.empty([0,6])
 	# start with a full random policy (eps=1 means every choice will be random)
 	my_policy = policy_eps_greedy_estimator(U, None, 1)
@@ -117,11 +117,11 @@ def learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0
 		n_new_obs = 0
 
 		print("Generating episodes' serie #{}/{} ({} news)".format(i+1, n_fit, ep_per_fit)) if verbose else ""
+		print("Current epsilon = {}".format(my_policy.eps)) if verbose else ""
 		print("\t", end='') if verbose else ""
 
 		# generate episodes using previous estimator of Q_N
 		for j in range(ep_per_fit):
-			print(".{}".format(j+1), end='\0') if verbose else ""
 			p_0 = np.random.rand()*0.2-0.1
 			ep = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy, p_0, s_0, T, stop_terminal=True)
 			n_new_obs += (ep.terminal_state_nbr+1)
@@ -134,7 +134,10 @@ def learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0
 
 		# set the eps-greedy policy for next generations
 		my_policy.Q_estimator = Q_estimator
-		my_policy.eps = eps
+		if eps_adapt and n_fit > 1:
+			my_policy.eps -= (1-eps)/(n_fit-1)
+		else:
+			my_policy.eps = eps
 
 
 	# return the final estimator
@@ -308,7 +311,7 @@ if __name__ == '__main__':
 	img_folder = "out/"
 
 	# REGRESSION ALGORITHM
-	algo = ["LinearRegression", "ExtraTreesRegressor", "MLPRegressor"][2]
+	algo = ["LinearRegression", "ExtraTreesRegressor", "MLPRegressor"][1]
 
 	if algo == "LinearRegression":
 		print("Estimator used is LinearRegression")
@@ -332,7 +335,7 @@ if __name__ == '__main__':
 	thresh_Q = 0.7
 
 	# POLICY (True = random || False = eps-greedy)
-	use_pol_rand = True
+	use_pol_rand = False
 	eps = 0.1
 
 	# EPISODE TO GENERATE
@@ -360,7 +363,7 @@ if __name__ == '__main__':
 			prtcl_name += "+eps_greedy_gen_{}_{}".format(n_fit, ep_per_fit)
 
 			print("Using eps-greedy policy")
-			Q_estimator = learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_fit, ep_per_fit, Q_estimator, eps, N_Q, verbose=verbose)
+			Q_estimator = learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_fit, ep_per_fit, Q_estimator, eps, N_Q, eps_adapt=True, verbose=verbose)
 
 	else:
 		prtcl_name += "+thresh_Q_diff"
@@ -377,7 +380,7 @@ if __name__ == '__main__':
 			prtcl_name += "+eps_greedy_gen_{}_{}".format(n_fit, ep_per_fit)
 
 			print("Using eps-greedy policy")
-			Q_estimator = learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_fit, ep_per_fit, Q_estimator, eps, 0, thresh = thresh_Q, verbose=verbose)
+			Q_estimator = learn_Q_eps_greedy(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_fit, ep_per_fit, Q_estimator, eps, 0, thresh = thresh_Q, eps_adapt=True, verbose=verbose)
 
 
 	# Save policy inferred from Q_N
