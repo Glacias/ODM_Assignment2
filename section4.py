@@ -271,20 +271,20 @@ class NN_estimator():
 	def __init__(self):
 		# Define the keras model
 		self.model = Sequential()
-		self.model.add(Dense(12, input_dim=3, kernel_initializer='normal', activation='relu'))
-		self.model.add(Dense(1, kernel_initializer='normal'))
+		self.model.add(Dense(200, input_dim=3, activation='relu'))
+		self.model.add(Dense(1, activation='linear'))
 
 		self.model.compile(loss='mean_squared_error', optimizer='adam', metrics=['accuracy'])
 
 	def fit(self, X, y):
 		#self.model.reset_metrics()
 		self.model = Sequential()
-		self.model.add(Dense(12, input_dim=3, kernel_initializer='normal', activation='relu'))
-		self.model.add(Dense(1, kernel_initializer='normal'))
+		self.model.add(Dense(200, input_dim=3, activation='relu'))
+		self.model.add(Dense(1, activation='linear'))
 
 		self.model.compile(loss='mean_squared_error', optimizer='adam', metrics=['accuracy'])
 		print(y)
-		self.model.fit(X, y, epochs=3)
+		self.model.fit(X, y, epochs=50)
 
 	def predict(self, X):
 		out = self.model.predict(X)

@@ -20,6 +20,7 @@ if __name__ == '__main__':
 	#my_policy = policy_rand(U)
 	T = 1000
 
+	# Simulate the trajectory
 	sect1 = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy, p_0, s_0, T)
 
 	# Create the gif

@@ -2,7 +2,7 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 
-# Class for simulating the car on the hill problem with the euler method
+# Class for simulating a trajectory of the car on the hill problem with the euler method
 class car_on_the_hill_problem():
 	def __init__(self, U, m, g, gamma, time_interval, integration_time_step, policy, p_0, s_0, T, stop_terminal=False):
 		self.U = U
@@ -50,19 +50,21 @@ class car_on_the_hill_problem():
 			self.traj[i+1][4] = next_step[0]
 			self.traj[i+1][5] = next_step[1]
 
-
+	# Hill function
 	def Hill(self, p):
 		if p < 0:
 			return p**2 + p
 		else:
 			return p/sqrt(1+5*p**2)
 
+	# First derivative of the hill function
 	def Hill_first_der(self, p):
 		if p < 0:
 			return 2*p + 1
 		else:
 			return (1 + 5*p**2)**(-3/2)
 
+	# Second derivative of the hill function
 	def Hill_second_der(self, p):
 		if p < 0:
 			return 2
@@ -90,6 +92,7 @@ class car_on_the_hill_problem():
 		else:
 			return 0
 
+	# Euler method for approximating ODE
 	def Euler_method(self, p_0, s_0, u, N, h):
 		p = p_0
 		s = s_0
@@ -153,15 +156,17 @@ if __name__ == '__main__':
 	gamma = 0.95
 	time_interval = 0.1
 	integration_time_step = 0.001
-	p_0 = 0
-	#p_0 = np.random.rand()*0.2-0.1
+	#p_0 = 0
+	p_0 = np.random.rand()*0.2-0.1
 	s_0 = 0
-	#my_policy = policy_cst(U, "left")
+	my_policy = policy_cst(U, "right")
 	#my_policy = policy_rand(U)
-	my_policy = policy_climb(U)
-	T = 50
+	#my_policy = policy_climb(U)
+	T = 11
 
+	# Simulate the trajectory
 	sect1 = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy, p_0, s_0, T, stop_terminal=True)
+	
 	# Graph
 	plt.plot(range(0,T), sect1.traj[:, 0], 'ro', label='Position')
 	plt.plot(range(0,T), sect1.traj[:, 1], 'go', label='Speed')
