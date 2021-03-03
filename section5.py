@@ -24,6 +24,10 @@ class Net(nn.Module):
 		x = self.fc3(x)
 		return x
 
+# Implementing the loss L = 1/2 (Q_phi - y)^2
+def my_loss(output, y):
+	loss = torch.mean(1/2 * (output - y.detach())**2)
+	return loss
 
 if __name__ == '__main__':
 	# Display info
@@ -39,7 +43,6 @@ if __name__ == '__main__':
 	s_0 = 0
 
 	## Generate a set of transition from trajectories with random policy
-
 	T = 1000
 	n_ep_tot = 500
 	observations = np.empty([0,6])
@@ -56,12 +59,35 @@ if __name__ == '__main__':
 	# Create NN
 	net = Net()
 
-	# Test to pass info trough the NN
-	print(observations[:,:3].shape)
-	obs_tensor = torch.from_numpy(observations[:,:3]).float()
-	print(obs_tensor)
-	output = net(obs_tensor)
-	print(output)
-	print(output.shape)
+	# Set optimizer
+	optimizer = optim.Adam(net.parameters(), lr=0.001)
 
-	## Train the neural network
+	# Set data input
+	X = torch.from_numpy(observations[:,:3]).float()
+	Obs = torch.from_numpy(observations).float()
+
+	# Train the neural network
+	n_epoch = 10
+	for epoch in range(n_epoch):
+		# Reset the gradient
+		net.zero_grad()
+		# Predict Q
+		Q = net(X)
+
+		# Compute y and don't keep track of the gradient for these operations
+		with torch.no_grad():
+			X_next = torch.cat([Obs[:,4:], torch.ones([observations.shape[0], 1]) * U[0]], dim=1)
+			Q_next = net(X_next)
+
+			# For all possible action
+			for u_idx in range(len(U)-1):
+				X_next = torch.cat([Obs[:,4:], torch.ones([observations.shape[0], 1]) * U[u_idx+1]], dim=1)
+				Q_next = torch.cat([Q_next, net(X_next)], dim=1)
+
+			max_Q_next = torch.max(Q_next, dim=1)[0]
+			y = Obs[:,3] + gamma * max_Q_next
+
+		loss = my_loss(Q, y)
+		loss.backward()
+		optimizer.step()
+		print(loss)
