@@ -40,30 +40,14 @@ def my_loss(output, y):
 	loss = torch.mean(1/2 * (output - y.detach())**2)
 	return loss
 
-
-def learn_Q_random_param(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_episode, n_epoch, batch_size, device=torch.device("cpu"), verbose=True):
-
-	observations = np.empty([0,6])
-	my_policy_rand = policy_rand(U)
-
-	print("Generating episodes") if verbose else ""
-
-	# Generate episodes
-	for i in range(n_episode):
-		p_0 = np.random.rand()*0.2-0.1
-		ep = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_rand, p_0, s_0, T, stop_terminal=True)
-		observations = add_episode(observations, ep)
-
-	print("Number of observations = {}".format(observations.shape[0]))
-	print("Number of empty = {}".format(np.count_nonzero(observations[:,3]==0)))
-	print("Number of success = {}".format(np.count_nonzero(observations[:,3]==1)))
-	print("Number of failure = {}".format(np.count_nonzero(observations[:,3]==-1)))
+def compute_Q_param(observations, U, gamma, n_epoch, batch_size, device=torch.device("cpu"), verbose=True):
 
 	# Create NN
 	net = Net().to(device)
 
 	# Set optimizer
-	optimizer = optim.Adam(net.parameters(), lr=0.01)
+	#optimizer = optim.Adam(net.parameters(), lr=0.0001, weight_decay=0.0005)
+	optimizer = optim.Adam(net.parameters(), lr=0.001)
 
 	# Set data input
 	Obs = torch.from_numpy(observations).float().to(device)
@@ -108,7 +92,27 @@ def learn_Q_random_param(U, m, g, gamma, time_interval, integration_time_step, s
 			#print("Ep {}/{}, batch {}/{} : loss = {}".format(epoch+1, n_epoch, (batch_idx//batch_size)+1, n_batch, loss)) if verbose else ""
 		print("Ep {}/{}, {} batches : loss = {}".format(epoch+1, n_epoch, n_batch, tot_loss)) if verbose else ""
 
-	#torch.save(net.state_dict(), "weight_NN.weights")
+	return net
+
+def learn_Q_random_param(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_episode, n_epoch, batch_size, device=torch.device("cpu"), verbose=True):
+
+	observations = np.empty([0,6])
+	my_policy_rand = policy_rand(U)
+
+	print("Generating episodes") if verbose else ""
+
+	# Generate episodes
+	for i in range(n_episode):
+		p_0 = np.random.rand()*0.2-0.1
+		ep = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_rand, p_0, s_0, T, stop_terminal=True)
+		observations = add_episode(observations, ep)
+
+	print("Number of observations = {}".format(observations.shape[0]))
+	print("Number of empty = {}".format(np.count_nonzero(observations[:,3]==0)))
+	print("Number of success = {}".format(np.count_nonzero(observations[:,3]==1)))
+	print("Number of failure = {}".format(np.count_nonzero(observations[:,3]==-1)))
+
+	net = compute_Q_param(observations, U, gamma, n_epoch, batch_size, device=device)
 
 	return net
 
@@ -138,6 +142,8 @@ if __name__ == '__main__':
 	batch_size = 100
 
 	Q_estimator = learn_Q_random_param(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_episode_tot, n_epoch, batch_size, device=device)
+
+	#torch.save(Q_estimator.state_dict(), "weight_NN.weights")
 
 	# Test policy
 	my_policy = policy_estimator(U, Q_estimator)
