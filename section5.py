@@ -24,6 +24,17 @@ class Net(nn.Module):
 		x = self.fc3(x)
 		return x
 
+	def predict(self, x):
+
+		x = torch.from_numpy(x).float()
+
+		with torch.no_grad():
+			x = self.forward(x)
+
+		return x.detach().cpu().numpy()
+
+
+
 # Implementing the loss L = 1/2 (Q_phi - y)^2
 def my_loss(output, y):
 	loss = torch.mean(1/2 * (output - y.detach())**2)
@@ -32,6 +43,10 @@ def my_loss(output, y):
 if __name__ == '__main__':
 	# Display info
 	verbose = True
+
+	# GPU
+	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+	print("Device : {}".format(device))
 
 	# Set up constants
 	U = [4, -4]
@@ -44,7 +59,7 @@ if __name__ == '__main__':
 
 	## Generate a set of transition from trajectories with random policy
 	T = 1000
-	n_ep_tot = 500
+	n_ep_tot = 1000
 	observations = np.empty([0,6])
 	my_policy_rand = policy_rand(U)
 
@@ -57,37 +72,61 @@ if __name__ == '__main__':
 		observations = add_episode(observations, ep)
 
 	# Create NN
-	net = Net()
+	net = Net().to(device)
 
 	# Set optimizer
 	optimizer = optim.Adam(net.parameters(), lr=0.001)
 
 	# Set data input
-	X = torch.from_numpy(observations[:,:3]).float()
-	Obs = torch.from_numpy(observations).float()
+	Obs = torch.from_numpy(observations).float().to(device)
 
 	# Train the neural network
-	n_epoch = 10
+	n_epoch = 100
+	batch_size = 100
+
+	n_batch = Obs.shape[0]//batch_size + (0 if (Obs.shape[0]%batch_size) == 0 else 1)
+
 	for epoch in range(n_epoch):
-		# Reset the gradient
-		net.zero_grad()
-		# Predict Q
-		Q = net(X)
+		# Shuffle observations
+		idx = torch.randperm(Obs.shape[0])
+		Obs = Obs[idx]
+		tot_loss = 0
 
-		# Compute y and don't keep track of the gradient for these operations
-		with torch.no_grad():
-			X_next = torch.cat([Obs[:,4:], torch.ones([observations.shape[0], 1]) * U[0]], dim=1)
-			Q_next = net(X_next)
+		for batch_idx in range(0, Obs.shape[0], batch_size):
+			# Obs[batch_idx:batch_idx+batch_size]
 
-			# For all possible action
-			for u_idx in range(len(U)-1):
-				X_next = torch.cat([Obs[:,4:], torch.ones([observations.shape[0], 1]) * U[u_idx+1]], dim=1)
-				Q_next = torch.cat([Q_next, net(X_next)], dim=1)
+			X = Obs[batch_idx:batch_idx+batch_size, :3]
 
-			max_Q_next = torch.max(Q_next, dim=1)[0]
-			y = Obs[:,3] + gamma * max_Q_next
+			# Reset the gradient
+			net.zero_grad()
+			# Predict Q
+			Q = net(X)
 
-		loss = my_loss(Q, y)
-		loss.backward()
-		optimizer.step()
-		print(loss)
+			# Compute y and don't keep track of the gradient for these operations
+			with torch.no_grad():
+				X_next = torch.cat([Obs[batch_idx:batch_idx+batch_size, 4:], torch.ones([X.shape[0], 1]).to(device) * U[0]], dim=1)
+				Q_next = net(X_next)
+
+				# For all possible action
+				for u_idx in range(len(U)-1):
+					X_next = torch.cat([Obs[batch_idx:batch_idx+batch_size, 4:], torch.ones([X.shape[0], 1]).to(device) * U[u_idx+1]], dim=1)
+					Q_next = torch.cat([Q_next, net(X_next)], dim=1)
+
+				max_Q_next = torch.max(Q_next, dim=1)[0]
+				y = Obs[batch_idx:batch_idx+batch_size, 3] + gamma * max_Q_next
+
+			loss = my_loss(Q, y)
+			loss.backward()
+			optimizer.step()
+
+			tot_loss += loss
+			#print("Ep {}/{}, batch {}/{} : loss = {}".format(epoch+1, n_epoch, (batch_idx//batch_size)+1, n_batch, loss)) if verbose else ""
+		print("Ep {}/{}, {} batches : loss = {}".format(epoch+1, n_epoch, n_batch, loss)) if verbose else ""
+
+	#torch.save(net.state_dict(), "weight_NN.weights")
+
+	net = net.cpu()
+
+	my_policy = policy_estimator(U, net)
+
+	plot_decision(net)
