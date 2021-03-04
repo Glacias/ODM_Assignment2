@@ -26,7 +26,7 @@ class Net(nn.Module):
 
 	def predict(self, x):
 
-		x = torch.from_numpy(x).float()
+		x = torch.from_numpy(np.array(x)).float().to(next(self.parameters()).device)
 
 		with torch.no_grad():
 			x = self.forward(x)
@@ -40,50 +40,35 @@ def my_loss(output, y):
 	loss = torch.mean(1/2 * (output - y.detach())**2)
 	return loss
 
-if __name__ == '__main__':
-	# Display info
-	verbose = True
 
-	# GPU
-	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-	print("Device : {}".format(device))
+def learn_Q_random_param(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_episode, n_epoch, batch_size, device=torch.device("cpu"), verbose=True):
 
-	# Set up constants
-	U = [4, -4]
-	m = 1
-	g = 9.81
-	gamma = 0.95
-	time_interval = 0.1
-	integration_time_step = 0.001
-	s_0 = 0
-
-	## Generate a set of transition from trajectories with random policy
-	T = 1000
-	n_ep_tot = 1000
 	observations = np.empty([0,6])
 	my_policy_rand = policy_rand(U)
 
 	print("Generating episodes") if verbose else ""
 
 	# Generate episodes
-	for i in range(n_ep_tot):
+	for i in range(n_episode):
 		p_0 = np.random.rand()*0.2-0.1
 		ep = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_rand, p_0, s_0, T, stop_terminal=True)
 		observations = add_episode(observations, ep)
+
+	print("Number of observations = {}".format(observations.shape[0]))
+	print("Number of empty = {}".format(np.count_nonzero(observations[:,3]==0)))
+	print("Number of success = {}".format(np.count_nonzero(observations[:,3]==1)))
+	print("Number of failure = {}".format(np.count_nonzero(observations[:,3]==-1)))
 
 	# Create NN
 	net = Net().to(device)
 
 	# Set optimizer
-	optimizer = optim.Adam(net.parameters(), lr=0.001)
+	optimizer = optim.Adam(net.parameters(), lr=0.01)
 
 	# Set data input
 	Obs = torch.from_numpy(observations).float().to(device)
 
 	# Train the neural network
-	n_epoch = 100
-	batch_size = 100
-
 	n_batch = Obs.shape[0]//batch_size + (0 if (Obs.shape[0]%batch_size) == 0 else 1)
 
 	for epoch in range(n_epoch):
@@ -121,12 +106,42 @@ if __name__ == '__main__':
 
 			tot_loss += loss
 			#print("Ep {}/{}, batch {}/{} : loss = {}".format(epoch+1, n_epoch, (batch_idx//batch_size)+1, n_batch, loss)) if verbose else ""
-		print("Ep {}/{}, {} batches : loss = {}".format(epoch+1, n_epoch, n_batch, loss)) if verbose else ""
+		print("Ep {}/{}, {} batches : loss = {}".format(epoch+1, n_epoch, n_batch, tot_loss)) if verbose else ""
 
 	#torch.save(net.state_dict(), "weight_NN.weights")
 
-	net = net.cpu()
+	return net
 
-	my_policy = policy_estimator(U, net)
+if __name__ == '__main__':
+	# Display info
+	verbose = True
 
-	plot_decision(net)
+	# GPU
+	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+	print("Device : {}".format(device))
+
+	# Set up constants
+	U = [4, -4]
+	m = 1
+	g = 9.81
+	gamma = 0.95
+	time_interval = 0.1
+	integration_time_step = 0.001
+	s_0 = 0
+
+	## Generate a set of transition from trajectories with random policy
+	T = 1000
+	n_episode_tot = 500
+
+	# Network training param
+	n_epoch = 100
+	batch_size = 100
+
+	Q_estimator = learn_Q_random_param(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_episode_tot, n_epoch, batch_size, device=device)
+
+	# Test policy
+	my_policy = policy_estimator(U, Q_estimator)
+	p_0 = 0
+	ep = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy, p_0, s_0, T, stop_terminal=True)
+
+	plot_decision(Q_estimator, episode=ep)
