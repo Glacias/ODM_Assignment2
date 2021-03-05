@@ -120,6 +120,8 @@ if __name__ == '__main__':
 	# Display info
 	verbose = True
 
+	img_folder = "out/"
+
 	# GPU
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	print("Device : {}".format(device))
@@ -135,11 +137,14 @@ if __name__ == '__main__':
 
 	## Generate a set of transition from trajectories with random policy
 	T = 1000
-	n_episode_tot = 500
+	n_episode_tot = 5000
 
 	# Network training param
-	n_epoch = 100
-	batch_size = 100
+	n_epoch = 500
+	batch_size = 64
+
+	prtcl_name = "sec5_{}epi_{}epo_{}batch".format(n_episode_tot, n_epoch, batch_size)
+
 
 	Q_estimator = learn_Q_random_param(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_episode_tot, n_epoch, batch_size, device=device)
 
@@ -150,4 +155,28 @@ if __name__ == '__main__':
 	p_0 = 0
 	ep = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy, p_0, s_0, T, stop_terminal=True)
 
-	plot_decision(Q_estimator, episode=ep)
+	plot_decision(Q_estimator, episode=ep, save_name=img_folder+prtcl_name)
+
+	## Estimate expected return
+	n_traj = 50
+	T = 1000
+	p_0_table = [np.random.rand()*0.2-0.1 for i in range(n_traj)]
+	table_traj = [car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_opt, p_0_table[i], s_0, T, stop_terminal=True) for i in range(n_traj)]
+	step_last_reward = np.array([table_traj[i].terminal_state_nbr for i in range(len(table_traj))]).max()
+	N = step_last_reward+1 + int(step_last_reward*0.25)
+	score_mu_table = score_mu(table_traj, N)
+
+	# graph
+	plt.plot(range(0, N+1), score_mu_table)
+	plt.xticks(range(0,N+1,int((N+1)/4)))
+	plt.xlabel('N')
+	plt.ylabel('Expected return $(J^{\mu}_N)$')
+	plt.savefig(img_folder+prtcl_name+"+exp_ret_{}.png".format(n_traj))
+	plt.savefig(img_folder+prtcl_name+"+exp_ret_{}.fig".format(n_traj))
+	if plot_fig:
+		plt.show()
+
+	print("Final expected return = {}".format(score_mu_table[-1]))
+	file = open(img_folder+prtcl_name+"+exp_ret_{}.txt".format(n_traj), "w")
+	file.write("Final expected return = {}".format(score_mu_table[-1]))
+	file.close()
