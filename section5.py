@@ -14,14 +14,14 @@ from section4 import *
 class Net(nn.Module):
 	def __init__(self):
 		super(Net, self).__init__()
-		self.fc1 = nn.Linear(3, 50)
-		self.fc2 = nn.Linear(50, 50)
-		self.fc3 = nn.Linear(50, 1)
+		self.fc1 = nn.Linear(3, 200)
+		self.fc2 = nn.Linear(200, 1)
+		#self.fc3 = nn.Linear(50, 1)
 
 	def forward(self, x):
 		x = F.relu(self.fc1(x))
-		x = F.relu(self.fc2(x))
-		x = self.fc3(x)
+		x = self.fc2(x)
+		#x = self.fc3(x)
 		return x
 
 	def predict(self, x):
@@ -94,7 +94,7 @@ def compute_Q_param(observations, U, gamma, n_epoch, batch_size, device=torch.de
 
 	return net
 
-def learn_Q_random_param(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_episode, n_epoch, batch_size, device=torch.device("cpu"), verbose=True):
+def generate_observations(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_episode, verbose=True):
 
 	observations = np.empty([0,6])
 	my_policy_rand = policy_rand(U)
@@ -112,9 +112,7 @@ def learn_Q_random_param(U, m, g, gamma, time_interval, integration_time_step, s
 	print("Number of success = {}".format(np.count_nonzero(observations[:,3]==1)))
 	print("Number of failure = {}".format(np.count_nonzero(observations[:,3]==-1)))
 
-	net = compute_Q_param(observations, U, gamma, n_epoch, batch_size, device=device)
-
-	return net
+	return observations
 
 if __name__ == '__main__':
 	# Display info
@@ -137,46 +135,104 @@ if __name__ == '__main__':
 
 	## Generate a set of transition from trajectories with random policy
 	T = 1000
-	n_episode_tot = 5000
+	n_episode_tot = 500
 
 	# Network training param
-	n_epoch = 500
-	batch_size = 64
+	n_epoch = 5
+	batch_size = 1
 
-	prtcl_name = "sec5_{}epi_{}epo_{}batch".format(n_episode_tot, n_epoch, batch_size)
+	prtcl_name = "sec5_{}epi_{}epo_{}batch_v3".format(n_episode_tot, n_epoch, batch_size)
+
+	# Generate the observations
+	obs_numb_step = [1000, 5000, 10000, 25000, 50000]
+	#obs_numb_step = [100, 500, 1000]
+
+	observations_all = np.empty([0,6])
+	my_policy_rand = policy_rand(U)
+
+	# Generate transitions until the maximum needed is reached
+	while True:
+		p_0 = np.random.rand()*0.2-0.1
+		ep = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_rand, p_0, s_0, T, stop_terminal=True)
+
+		if observations_all.shape[0] + ep.terminal_state_nbr + 1 < obs_numb_step[-1]:
+			observations_all = add_episode(observations_all, ep)
+		else:
+			ep.terminal_state_nbr = obs_numb_step[-1] - observations_all.shape[0] -1
+			observations_all = add_episode(observations_all, ep)
+			break
+
+	# Array for valueof expected return
+	exp_return_val = np.zeros([len(obs_numb_step),2])
+
+	# Compute for different learning set size (number of observations)
+	i = 0
+	for n_transition in obs_numb_step:
+		observations = observations_all[:n_transition, :]
+	
+		# Compute the paramatetric Q learning estimator
+		Q_estimator_param = compute_Q_param(observations, U, gamma, n_epoch, batch_size, device=device)
+
+		#torch.save(Q_estimator.state_dict(), "weight_NN.weights")
+
+		# Test policy
+		my_policy_param = policy_estimator(U, Q_estimator_param)
+		p_0 = 0
+		ep = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_param, p_0, s_0, T, stop_terminal=True)
+
+		#plot_decision(Q_estimator_param, episode=ep, save_name=img_folder+prtcl_name)
 
 
-	Q_estimator = learn_Q_random_param(U, m, g, gamma, time_interval, integration_time_step, s_0, T, n_episode_tot, n_epoch, batch_size, device=device)
+		## Launch section 4 and compare
+		Q_estimator_FQI = ExtraTreesRegressor(n_estimators=100, random_state=0)
 
-	#torch.save(Q_estimator.state_dict(), "weight_NN.weights")
+		Br = 1
+		thresh_ineq = 0.1
+		N_Q = compute_N_Q(gamma, Br, thresh_ineq)
 
-	# Test policy
-	my_policy = policy_estimator(U, Q_estimator)
-	p_0 = 0
-	ep = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy, p_0, s_0, T, stop_terminal=True)
+		# Compute estimator
+		Q_estimator_FQI = compute_Q_estimator(observations, U, gamma, Q_estimator_FQI, N_Q, verbose=True)
 
-	plot_decision(Q_estimator, episode=ep, save_name=img_folder+prtcl_name)
+		# Test policy
+		my_policy_FQI = policy_estimator(U, Q_estimator_FQI)
+		p_0 = 0
+		ep = car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_FQI, p_0, s_0, T, stop_terminal=True)
 
-	## Estimate expected return
-	n_traj = 50
-	T = 1000
-	p_0_table = [np.random.rand()*0.2-0.1 for i in range(n_traj)]
-	table_traj = [car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_opt, p_0_table[i], s_0, T, stop_terminal=True) for i in range(n_traj)]
-	step_last_reward = np.array([table_traj[i].terminal_state_nbr for i in range(len(table_traj))]).max()
-	N = step_last_reward+1 + int(step_last_reward*0.25)
-	score_mu_table = score_mu(table_traj, N)
+		#prtcl_name_FQI = "sec5_{}epi_{}epo_{}batch_v2_FQI".format(n_episode_tot, n_epoch, batch_size)
+		#plot_decision(Q_estimator_FQI, episode=ep, save_name=img_folder+prtcl_name_FQI)
+
+		## Estimate expected return for the two methods
+		n_traj = 50
+		T = 1000
+		p_0_table = [np.random.rand()*0.2-0.1 for i in range(n_traj)]
+
+		table_traj_param = [car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_param, p_0_table[i], s_0, T, stop_terminal=True) for i in range(n_traj)]
+		table_traj_FQI = [car_on_the_hill_problem(U, m, g, gamma, time_interval, integration_time_step, my_policy_FQI, p_0_table[i], s_0, T, stop_terminal=True) for i in range(n_traj)]
+
+		step_last_reward_param = np.array([table_traj_param[i].terminal_state_nbr for i in range(len(table_traj_param))]).max()
+		step_last_reward_FQI = np.array([table_traj_FQI[i].terminal_state_nbr for i in range(len(table_traj_FQI))]).max()
+		
+		N_param = step_last_reward_param+1 + int(step_last_reward_param*0.25)
+		N_FQI = step_last_reward_FQI+1 + int(step_last_reward_FQI*0.25)
+
+		N_max = max([N_param, N_FQI])
+
+		score_mu_table_param = score_mu(table_traj_param, N_max)
+		score_mu_table_FQI = score_mu(table_traj_FQI, N_max)
+
+		exp_return_val[i, 0] = score_mu_table_param[-1]
+		exp_return_val[i, 1] = score_mu_table_FQI[-1]
+
+		i += 1
 
 	# graph
-	plt.plot(range(0, N+1), score_mu_table)
-	plt.xticks(range(0,N+1,int((N+1)/4)))
-	plt.xlabel('N')
-	plt.ylabel('Expected return $(J^{\mu}_N)$')
-	plt.savefig(img_folder+prtcl_name+"+exp_ret_{}.png".format(n_traj))
-	plt.savefig(img_folder+prtcl_name+"+exp_ret_{}.fig".format(n_traj))
-	if plot_fig:
+	plt.plot(obs_numb_step, exp_return_val[:, 0], label ='Param')
+	plt.plot(obs_numb_step, exp_return_val[:, 1], label='FQI')
+	#plt.xticks(range(0,N_max+1,int((N_max+1)/4)))
+	plt.xlabel('Number of transition')
+	plt.ylabel('Expected return $(J^{\mu})$')
+	plt.legend()
+	plt.savefig(img_folder+prtcl_name+"+exp_ret_{}_final.png".format(n_traj))
+	#plt.savefig(img_folder+prtcl_name+"+exp_ret_{}.fig".format(n_traj))
+	if True:
 		plt.show()
-
-	print("Final expected return = {}".format(score_mu_table[-1]))
-	file = open(img_folder+prtcl_name+"+exp_ret_{}.txt".format(n_traj), "w")
-	file.write("Final expected return = {}".format(score_mu_table[-1]))
-	file.close()
